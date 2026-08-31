@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    />
+
+    <title>Qwen Local Coder</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+
+            font-family:
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+
+            color: var(--vscode-foreground);
+            background: var(--vscode-sideBar-background);
+
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            padding: 16px;
+
+            border-bottom: 1px solid
+                var(--vscode-panel-border);
+        }
+
+        .title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            margin-top: 4px;
+
+            font-size: 11px;
+
+            color:
+                var(--vscode-descriptionForeground);
+        }
+
+        .messages {
+            flex: 1;
+
+            overflow-y: auto;
+
+            padding: 16px;
+        }
+
+        .message {
+            margin-bottom: 16px;
+        }
+
+        .label {
+            font-size: 11px;
+
+            font-weight: 600;
+
+            margin-bottom: 6px;
+
+            color:
+                var(--vscode-descriptionForeground);
+        }
+
+        .content {
+            padding: 10px;
+
+            border-radius: 6px;
+
+            background:
+                var(--vscode-textCodeBlock-background);
+
+            white-space: pre-wrap;
+
+            line-height: 1.5;
+
+            font-size: 13px;
+        }
+
+        .input-area {
+            padding: 12px;
+
+            border-top: 1px solid
+                var(--vscode-panel-border);
+        }
+
+        textarea {
+            width: 100%;
+
+            min-height: 80px;
+
+            max-height: 180px;
+
+            resize: vertical;
+
+            padding: 10px;
+
+            color:
+                var(--vscode-input-foreground);
+
+            background:
+                var(--vscode-input-background);
+
+            border: 1px solid
+                var(--vscode-input-border);
+
+            border-radius: 6px;
+
+            outline: none;
+
+            font-family: inherit;
+
+            font-size: 13px;
+        }
+
+        textarea:focus {
+            border-color:
+                var(--vscode-focusBorder);
+        }
+
+        .actions {
+            display: flex;
+
+            justify-content: flex-end;
+
+            margin-top: 8px;
+        }
+
+        button {
+            padding: 6px 14px;
+
+            border: none;
+
+            border-radius: 4px;
+
+            cursor: pointer;
+
+            color:
+                var(--vscode-button-foreground);
+
+            background:
+                var(--vscode-button-background);
+        }
+
+        button:hover {
+            background:
+                var(--vscode-button-hoverBackground);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+
+            cursor: default;
+        }
+
+        .empty {
+            text-align: center;
+
+            margin-top: 40px;
+
+            color:
+                var(--vscode-descriptionForeground);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+
+        <div class="title">
+            🤖 Qwen Local Coder
+        </div>
+
+        <div class="subtitle">
+            Qwen2.5-Coder-7B-Instruct · Local
+        </div>
+
+    </div>
+
+
+    <div
+        id="messages"
+        class="messages"
+    >
+
+        <div class="empty">
+
+            Ask Qwen Coder to help with your code.
+
+        </div>
+
+    </div>
+
+
+    <div class="input-area">
+
+        <textarea
+            id="prompt"
+            placeholder="Ask Qwen Coder..."
+        ></textarea>
+
+        <div class="actions">
+
+            <button
+                id="send"
+            >
+                Send
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+        const vscode =
+            acquireVsCodeApi();
+
+        const promptInput =
+            document.getElementById("prompt");
+
+        const sendButton =
+            document.getElementById("send");
+
+        const messages =
+            document.getElementById("messages");
+
+
+        function addMessage(
+            role,
+            content
+        ) {
+
+            const empty =
+                messages.querySelector(".empty");
+
+            if (empty) {
+                empty.remove();
+            }
+
+
+            const message =
+                document.createElement("div");
+
+            message.className =
+                "message";
+
+
+            const label =
+                document.createElement("div");
+
+            label.className =
+                "label";
+
+            label.textContent =
+                role;
+
+
+            const body =
+                document.createElement("div");
+
+            body.className =
+                "content";
+
+            body.textContent =
+                content;
+
+
+            message.appendChild(label);
+
+            message.appendChild(body);
+
+            messages.appendChild(message);
+
+
+            messages.scrollTop =
+                messages.scrollHeight;
+        }
+
+
+        function sendPrompt() {
+
+            const prompt =
+                promptInput.value.trim();
+
+            if (!prompt) {
+                return;
+            }
+
+
+            addMessage(
+                "You",
+                prompt
+            );
+
+
+            vscode.postMessage({
+                command: "askQwen",
+                prompt: prompt
+            });
+
+
+            promptInput.value = "";
+
+            sendButton.disabled = true;
+        }
+
+
+        sendButton.addEventListener(
+            "click",
+            sendPrompt
+        );
+
+
+        promptInput.addEventListener(
+            "keydown",
+            (event) => {
+
+                if (
+                    event.key === "Enter" &&
+                    !event.shiftKey
+                ) {
+
+                    event.preventDefault();
+
+                    sendPrompt();
+                }
+
+            }
+        );
+
+
+        window.addEventListener(
+            "message",
+            (event) => {
+
+                const message =
+                    event.data;
+
+
+                if (
+                    message.command ===
+                    "qwenResponse"
+                ) {
+
+                    addMessage(
+                        "Qwen",
+                        message.response
+                    );
+
+                    sendButton.disabled =
+                        false;
+                }
+
+
+                if (
+                    message.command ===
+                    "qwenError"
+                ) {
+
+                    addMessage(
+                        "Error",
+                        message.error
+                    );
+
+                    sendButton.disabled =
+                        false;
+                }
+
+            }
+        );
+
+    </script>
+
+</body>
+</html>
