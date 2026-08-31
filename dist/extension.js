@@ -43,22 +43,11 @@ exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(__webpack_require__(1));
 const QwenPromptViewProvider_1 = __webpack_require__(2);
-const QWEN_API_URL = "http://localhost:8000/generate-code";
 function activate(context) {
-    console.log('Qwen Local Coder extension "qwen-local-coder" is now active.');
-    /*
-     * Register Qwen Coder sidebar
-     */
+    console.log("Qwen Local Coder extension activated.");
     const provider = new QwenPromptViewProvider_1.QwenPromptViewProvider(context.extensionUri);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(QwenPromptViewProvider_1.QwenPromptViewProvider.viewType, provider));
-    /*
-     * Register:
-     * QWEN: Ask Qwen Coder
-     *
-     * Sends selected code to the
-     * /generate-code endpoint.
-     */
-    const disposable = vscode.commands.registerCommand("qwen-local-coder.ask", async () => {
+    const disposable = vscode.commands.registerCommand("qwen-local-coder.ask", () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
             vscode.window.showWarningMessage("No active editor found.");
@@ -70,53 +59,10 @@ function activate(context) {
             vscode.window.showWarningMessage("Please select some code first.");
             return;
         }
-        const prompt = `
-Please analyze the following code.
-
-Explain what it does, identify any potential
-issues, and suggest improvements where appropriate.
-
-Code:
-
-${selectedCode}
-`;
-        try {
-            vscode.window.showInformationMessage("Qwen Coder is processing...");
-            const response = await fetch(QWEN_API_URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    prompt,
-                }),
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const data = (await response.json());
-            showQwenResponse(data.response);
-        }
-        catch (error) {
-            console.error("Qwen API error:", error);
-            vscode.window.showErrorMessage("Unable to connect to local Qwen Coder.");
-        }
+        provider.setSelectedCode(selectedCode);
+        vscode.commands.executeCommand("qwen-local-coder.promptView.focus");
     });
     context.subscriptions.push(disposable);
-}
-/*
- * Display Qwen response in the
- * VS Code Output panel.
- */
-function showQwenResponse(response) {
-    const output = vscode.window.createOutputChannel("Qwen Local Coder");
-    output.clear();
-    output.appendLine("==============================");
-    output.appendLine("       QWEN LOCAL CODER");
-    output.appendLine("==============================");
-    output.appendLine("");
-    output.appendLine(response);
-    output.show(true);
 }
 function deactivate() { }
 
@@ -172,10 +118,12 @@ const QWEN_API_URL = "http://localhost:8000/generate-code";
 class QwenPromptViewProvider {
     extensionUri;
     static viewType = "qwen-local-coder.promptView";
+    webviewView;
     constructor(extensionUri) {
         this.extensionUri = extensionUri;
     }
     resolveWebviewView(webviewView) {
+        this.webviewView = webviewView;
         webviewView.webview.options = {
             enableScripts: true,
         };
@@ -184,19 +132,17 @@ class QwenPromptViewProvider {
         webviewView.webview.onDidReceiveMessage(async (message) => {
             if (message.command === "askQwen") {
                 await this.askQwen(message.prompt, webviewView);
-                return;
             }
-            if (message.command === "showResponse") {
-                const output = vscode.window.createOutputChannel("Qwen Local Coder");
-                output.clear();
-                output.appendLine("==============================");
-                output.appendLine("       QWEN LOCAL CODER");
-                output.appendLine("==============================");
-                output.appendLine("");
-                output.appendLine(message.response);
-                output.show(true);
-                return;
+            if (message.command ===
+                "applyResponse") {
+                await this.applyResponse(message.response);
             }
+        });
+    }
+    setSelectedCode(code) {
+        this.webviewView?.webview.postMessage({
+            command: "selectedCode",
+            code,
         });
     }
     async askQwen(prompt, webviewView) {
@@ -231,11 +177,24 @@ class QwenPromptViewProvider {
             });
         }
     }
+    async applyResponse(response) {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showWarningMessage("No active editor found.");
+            return;
+        }
+        const selection = editor.selection;
+        await editor.edit((editBuilder) => {
+            editBuilder.replace(selection, response);
+        });
+        vscode.window.showInformationMessage("Qwen response applied to the editor.");
+    }
     getHtml() {
         return `
       <!DOCTYPE html>
 
       <html>
+
       <head>
 
         <style>
@@ -250,11 +209,46 @@ class QwenPromptViewProvider {
             padding: 10px;
           }
 
-          textarea {
+          .section-title {
+            font-size: 12px;
+
+            margin-bottom: 6px;
+
+            opacity: 0.8;
+          }
+
+          #selected-code {
             width: 100%;
+
             box-sizing: border-box;
 
-            min-height: 100px;
+            max-height: 150px;
+
+            overflow: auto;
+
+            padding: 8px;
+
+            border-radius: 6px;
+
+            background:
+              var(--vscode-textCodeBlock-background);
+
+            font-family:
+              monospace;
+
+            font-size: 11px;
+
+            white-space: pre-wrap;
+
+            margin-bottom: 12px;
+          }
+
+          textarea {
+            width: 100%;
+
+            box-sizing: border-box;
+
+            min-height: 90px;
 
             resize: vertical;
 
@@ -299,6 +293,11 @@ class QwenPromptViewProvider {
               var(--vscode-button-hoverBackground);
           }
 
+          #apply {
+            background:
+              var(--vscode-testing-iconPassed);
+          }
+
           #status {
             margin-top: 10px;
 
@@ -307,15 +306,49 @@ class QwenPromptViewProvider {
             opacity: 0.8;
           }
 
+          #response {
+            margin-top: 12px;
+
+            padding: 8px;
+
+            border-radius: 6px;
+
+            background:
+              var(--vscode-textCodeBlock-background);
+
+            white-space: pre-wrap;
+
+            font-family:
+              monospace;
+
+            font-size: 11px;
+
+            max-height: 350px;
+
+            overflow: auto;
+          }
+
         </style>
 
       </head>
 
       <body>
 
+        <div class="section-title">
+          Selected Code
+        </div>
+
+        <div id="selected-code">
+          No code selected.
+        </div>
+
+        <div class="section-title">
+          What would you like Qwen to do?
+        </div>
+
         <textarea
           id="prompt"
-          placeholder="Ask Qwen Coder..."
+          placeholder="Explain, optimize, refactor, fix..."
         ></textarea>
 
         <button id="ask">
@@ -323,6 +356,18 @@ class QwenPromptViewProvider {
         </button>
 
         <div id="status"></div>
+
+        <div
+          id="response"
+          style="display:none;"
+        ></div>
+
+        <button
+          id="apply"
+          style="display:none;"
+        >
+          Apply Changes
+        </button>
 
         <script>
 
@@ -344,25 +389,86 @@ class QwenPromptViewProvider {
               "status"
             );
 
+          const selectedCode =
+            document.getElementById(
+              "selected-code"
+            );
+
+          const responseBox =
+            document.getElementById(
+              "response"
+            );
+
+          const applyButton =
+            document.getElementById(
+              "apply"
+            );
+
+          let currentCode = "";
+
+          let currentResponse = "";
+
           button.addEventListener(
             "click",
             () => {
 
-              const value =
+              const instruction =
                 prompt.value.trim();
 
-              if (!value) {
+              if (!instruction) {
                 return;
               }
 
+              if (!currentCode) {
+
+                status.textContent =
+                  "Please select some code first.";
+
+                return;
+              }
+
+              const combinedPrompt = \`
+Instruction:
+\${instruction}
+
+Selected code:
+\${currentCode}
+\`;
+
               vscode.postMessage({
                 command: "askQwen",
-                prompt: value
+                prompt: combinedPrompt
               });
 
               status.textContent =
                 "Sending to Qwen Coder...";
 
+              responseBox.style.display =
+                "none";
+
+              applyButton.style.display =
+                "none";
+            }
+          );
+
+          applyButton.addEventListener(
+            "click",
+            () => {
+
+              if (!currentResponse) {
+                return;
+              }
+
+              vscode.postMessage({
+                command:
+                  "applyResponse",
+
+                response:
+                  currentResponse
+              });
+
+              status.textContent =
+                "Changes applied.";
             }
           );
 
@@ -375,12 +481,23 @@ class QwenPromptViewProvider {
 
               if (
                 message.command ===
+                "selectedCode"
+              ) {
+
+                currentCode =
+                  message.code;
+
+                selectedCode.textContent =
+                  currentCode;
+              }
+
+              if (
+                message.command ===
                 "status"
               ) {
 
                 status.textContent =
                   message.message;
-
               }
 
               if (
@@ -388,15 +505,20 @@ class QwenPromptViewProvider {
                 "response"
               ) {
 
+                currentResponse =
+                  message.response;
+
                 status.textContent =
                   "Response received.";
 
-                vscode.postMessage({
-                  command: "showResponse",
-                  response:
-                    message.response
-                });
+                responseBox.style.display =
+                  "block";
 
+                responseBox.textContent =
+                  currentResponse;
+
+                applyButton.style.display =
+                  "block";
               }
 
               if (
@@ -406,7 +528,6 @@ class QwenPromptViewProvider {
 
                 status.textContent =
                   message.message;
-
               }
 
             }
@@ -415,6 +536,7 @@ class QwenPromptViewProvider {
         </script>
 
       </body>
+
       </html>
     `;
     }
