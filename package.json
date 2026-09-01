@@ -14,44 +14,42 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [
+  "commands": [
+    {
+      "command": "qwen-local-coder.ask",
+      "title": "QWEN: Ask Qwen Coder"
+    }
+  ],
+
+  "menus": {
+    "editor/context": [
       {
         "command": "qwen-local-coder.ask",
-        "title": "QWEN: Ask Qwen Coder"
-      },
-      {
-        "command": "qwen-local-coder.promptView.focus",
-        "title": "Qwen Coder: Focus Prompt"
+        "group": "navigation@100"
       }
-    ],
-    "menus": {
-      "editor/context": [
-        {
-          "command": "qwen-local-coder.ask",
-          "when": "editorTextFocus && editorHasSelection",
-          "group": "qwen"
-        }
-      ]
-    },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "qwen-coder",
-          "title": "Qwen Coder",
-          "icon": "media/qwen.svg"
-        }
-      ]
-    },
-    "views": {
-      "qwen-coder": [
-        {
-          "type": "webview",
-          "id": "qwen-local-coder.promptView",
-          "name": "Qwen Coder"
-        }
-      ]
-    }
+    ]
   },
+
+  "viewsContainers": {
+    "activitybar": [
+      {
+        "id": "qwen-coder",
+        "title": "Qwen Coder",
+        "icon": "media/qwen.svg"
+      }
+    ]
+  },
+
+  "views": {
+    "qwen-coder": [
+      {
+        "type": "webview",
+        "id": "qwen-local-coder.promptView",
+        "name": "Qwen Coder"
+      }
+    ]
+  }
+},
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "webpack",
